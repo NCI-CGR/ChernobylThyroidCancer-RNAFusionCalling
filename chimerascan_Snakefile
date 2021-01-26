@@ -21,8 +21,7 @@ rule chimerascan:
     threads: 8
     params: 
         cs_script = config['cs_script'],
-        idx_dir = config['cs_dir'],
-        idx_pre = config['cs_idx'],
+        idx_dir = config['cs_idx'],
         out = 'cs_out/{sampleID}',
         qual = config['quality_scale'],
         strand = config['cs_strand']
@@ -30,7 +29,7 @@ rule chimerascan:
         shell('{params.cs_script} -p {threads} \
                 --library-type={params.strand} \
                 --quals={params.qual} \
-                {params.idx_dir}/{params.idx_pre} \
+                {params.idx_dir} \
                 {input[0]} {input[1]} \
                 {params.out}')
 

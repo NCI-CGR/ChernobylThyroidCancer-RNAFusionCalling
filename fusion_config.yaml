@@ -1,0 +1,90 @@
+fastq_dir: path/fastqs 
+spanning: 3 # min number of supporting reads for each reported fusion
+
+
+# Ericscript files
+eric_dir: path/ericscript-0.5.5 # where ericscript.pl and samtools-0.1.19 are located
+es_db_dir: path/ericscript_db_homosapiens_ensembl73 # downloaded from ericscript site https://sites.google.com/site/bioericscript/download
+
+# Mapsplice files
+ms_dir: path/MapSplice-v2.2.1 # where mapsplice.py and old samtools are located
+ms_ref: path/ucsc/hg19_chrom # directory with a fasta for each chromosome
+bow_path: path/hg19_bowtie # index for bowtie
+annot_gtf: path/hg19_genebiotype.gtf # annotation file
+
+# STAR-Fusion files
+star_genome_dir: path/STAR_hg19_v2.7.5c # STAR index
+sf_genome_lib: path/GRCh37_gencode_v19_CTAT_lib_Apr032020.plug-n-play # downloaded from https://data.broadinstitute.org/Trinity/CTAT_RESOURCE_LIB/
+
+# Chimerascan files
+cs_script: path/chimerascan-0.4.5/bin/chimerascan_run.py
+cs_idx: path/hg19.genePred_index # indexed as per https://code.google.com/archive/p/chimerascan/wikis/Installation.wiki
+cs_strand: fr-secondstrand
+quality_scale: sanger
+
+# Mapsplice output headers
+ms_cols:
+    - chrom
+    - doner_end
+    - acceptor_start
+    - id
+    - coverage
+    - strand
+    - rgb
+    - block_count
+    - block_size
+    - block_distance
+    - entropy
+    - flank_case
+    - flank_string
+    - min_mismatch
+    - max_mismatch
+    - ave_mismatch
+    - max_min_suffix
+    - max_min_prefix
+    - min_anchor_difference
+    - unique_read_count
+    - multi_read_count
+    - paired_read_count
+    - left_paired_read_count
+    - right_paired_read_count
+    - multiple_paired_read_count
+    - unique_paired_read_count
+    - single_read_count
+    - encompassing_read pair_count
+    - doner_start
+    - acceptor_end
+    - doner_iosforms
+    - acceptor_isoforms
+    - obsolete
+    - obsolete1
+    - obsolete2
+    - obsolete3
+    - minimal_doner_isoform_length
+    - maximal_doner_isoform_length
+    - minimal_acceptor_isoform_length
+    - maximal_acceptor_isoform_length
+    - paired_reads_entropy
+    - mismatch_per_bp
+    - anchor_score
+    - max_doner_fragment
+    - max_acceptor_fragment
+    - max_cur_fragment
+    - min_cur_fragment
+    - ave_cur_fragment
+    - doner_encompass_unique
+    - doner_encompass_multiple
+    - acceptor_encompass_unique
+    - acceptor_encompass_multiple
+    - doner_match_to_normal
+    - acceptor_match_to_normal
+    - doner_seq
+    - acceptor_seq
+    - match_gene_strand
+    - annotated_type
+    - fusion_type
+    - gene_strand
+    - annotated_gene_donor
+    - annotated_gene_acceptor
+
+
