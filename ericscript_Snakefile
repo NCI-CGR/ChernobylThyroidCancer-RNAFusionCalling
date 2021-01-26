@@ -1,0 +1,67 @@
+# vim: ft=python
+import os
+import glob
+import itertools
+
+workdir: os.environ['PWD']
+shell.executable('bash')
+
+
+localrules: eric_all, es_copy
+
+rule eric_all:
+    input: 'tables/all_es.txt'
+
+
+rule eric:
+    input: input_files 
+    output: 'es_out/{sampleID}/{sampleID}.results.filtered.tsv'
+    threads: 32 
+    params:
+        eric = config['eric_dir'],
+        es_db = config['eric_db'],
+    run:
+        # Snakemake creates the output dir, which ericscript does not like, so delete it
+        shell('export PATH={params.eric}/samtools-0.1.19:$PATH; \
+                rm -r es_out/{wildcards.sampleID}; \
+                {params.eric}/ericscript.pl \
+                -name {wildcards.sampleID} \
+                -o es_out/{wildcards.sampleID} \
+                -db {params.es_db} \
+                -p {threads} \
+                {input}')
+
+
+rule es_copy:
+    input: rules.eric.output
+    output: 'es_calls/{sampleID}_es_filtered.tsv'
+    run:
+        shell('cp {input} {output}')
+
+
+rule build_es_table:
+    input: expand('es_calls/{sampleID}_es_filtered.tsv', sampleID=sampleIDs)
+    output: 'tables/all_es.txt'
+    params:
+        span = config['spanning'],
+    run:
+        dfs = []
+        for fname in input:
+            df = pandas.read_csv(fname, sep='\t')
+            df['sampleID'] = parse_sampleID(fname)
+            df['ericscript'] = 1
+            df['fusion'] = df.apply(lambda row: sorted_fusion(row['GeneName1'], row['GeneName2']), axis=1)
+            df['supporting_reads'] = df.spanningreads
+            df['total_support'] = df['supporting_reads'].groupby(df['fusion']).transform('sum') # combine fusions that are A|B and B|A
+            df.drop_duplicates('fusion', inplace=True) # only keep the first row of each fusion now that support reads are summed
+            df = df[df['total_support'] >= params.span] # remove fusions with too few supporting reads
+            scores = list(range(1, len(df) + 1))
+            scores.reverse() # you want the fusions with the most reads getting the highest score
+            df.sort_values(by=['total_support'], ascending=False, inplace=True)
+            df['es_rank'] = scores
+            df['es_score'] = df['es_rank'].apply(lambda x: float(x)/len(df)) # percent scores for each fusion with 1 being top fusion
+            dfs.append(df)
+        
+        dfes = pandas.concat(dfs)
+        dfes.to_csv(output[0], sep='\t', index=False)
+

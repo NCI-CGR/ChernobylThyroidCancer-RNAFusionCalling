@@ -1,0 +1,70 @@
+# vim: ft=python
+import sys
+
+workdir: os.environ['PWD']
+shell.executable('bash')
+
+localrules: cs_all, cs_copy
+
+
+rule cs_all:
+    input: 
+        expand('cs_calls/{sampleID}_cs_chimeras.bedpe', sampleID=sampleIDs),
+        'tables/all_cs.txt'
+
+
+rule chimerascan:
+    input:
+        'unzipped/{sampleID}_R1.fastq',
+        'unzipped/{sampleID}_R2.fastq'
+    output: 'cs_out/{sampleID}/chimeras.bedpe'
+    threads: 8
+    params: 
+        cs_script = config['cs_script'],
+        idx_dir = config['cs_dir'],
+        idx_pre = config['cs_idx'],
+        out = 'cs_out/{sampleID}',
+        qual = config['quality_scale'],
+        strand = config['cs_strand']
+    run:
+        shell('{params.cs_script} -p {threads} \
+                --library-type={params.strand} \
+                --quals={params.qual} \
+                {params.idx_dir}/{params.idx_pre} \
+                {input[0]} {input[1]} \
+                {params.out}')
+
+        
+rule cs_copy:
+    input: 'cs_out/{sampleID}/chimeras.bedpe'
+    output: 'cs_calls/{sampleID}_cs_chimeras.bedpe'
+    run:
+        shell('cp {input} {output}')
+
+
+rule cs_table:
+    input: expand('cs_calls/{sampleID}_cs_chimeras.bedpe', sampleID=sampleIDs)
+    output: 'tables/all_cs.txt'
+    params: span = config['spanning']
+    run:
+        dfs = []
+        for fname in input:
+            df = pandas.read_csv(fname, sep='\t')
+            df['sampleID'] = parse_sampleID(fname)
+            df['chimerascan'] = 1
+            df['fusion'] = df.apply(lambda x: sorted_fusion(x.genes5p, x.genes3p), axis=1)
+            df['supporting_reads'] = df.spanning_frags
+            df['total_support'] = df['supporting_reads'].groupby(df['fusion']).transform('sum') # combine fusions that are A|B and B|A
+            df.drop_duplicates('fusion', inplace=True)  # only keep first row with fusion now that support reads are summed
+            df = df[df.total_support >= params.span]    # remove fusions with too few support reads
+            scores = list(range(1, len(df) + 1))
+            scores.reverse()    # you want the fusions w/most reads getting highest score
+            df.sort_values(by=['total_support'], ascending=[False], inplace=True)
+            df['cs_rank'] = scores
+            df['cs_score'] = df.cs_rank.apply(lambda x: float(x)/len(df))   # percent scores for each fusion (1.0 is top fusion)
+            dfs.append(df)
+
+        dfcs = pandas.concat(dfs)
+        dfcs.to_csv(output[0], sep='\t', index=False)
+
+

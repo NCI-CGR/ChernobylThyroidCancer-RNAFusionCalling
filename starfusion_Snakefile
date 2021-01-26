@@ -1,0 +1,93 @@
+# vim: ft=python
+
+workdir: os.environ['PWD']
+shell.executable('bash')
+
+
+localrules: sf_all, sf_copy
+
+
+rule sf_all:
+    input: 
+        expand('sf_calls/{sampleID}_star-fusion.fusion_candidates.preliminary', sampleID=sampleIDs),
+        'tables/all_sf.txt'
+
+
+rule sf_staralign:
+    input: input_files
+    output: 'star_out/{sampleID}/{sampleID}_Chimeric.out.junction'
+    threads: 32
+    params:
+        genomedir = config['star_genome_dir'],
+        gtf = config['annot_gtf'],
+        out = 'star_out'
+    run:
+        shell('STAR --runThreadN {threads} \
+            --readFilesCommand zcat \
+            --sjdbGTFfile {params.gtf} \
+            --twopass1readsN -1 \
+            --chimOutType SeparateSAMold Junctions\
+            --twopassMode Basic \
+            --outSAMtype BAM Unsorted \
+            --outReadsUnmapped None \
+            --genomeDir {params.genomedir} \
+            --chimSegmentReadGapMax 3 \
+            --chimSegmentMin 12 \
+            --chimJunctionOverhangMin 12 \
+            --chimFilter None \
+            --alignSJstitchMismatchNmax 5 -1 5 5 \
+            --alignSJDBoverhangMin 12 \
+            --alignMatesGapMax 200000 \
+            --alignIntronMax 200000 \
+            --outFileNamePrefix {params.out}/{wildcards.sampleID}/{wildcards.sampleID}_ \
+            --chimOutJunctionFormat 1\
+            --readFilesIn {input}')
+
+
+rule starfusion:
+    input: rules.sf_staralign.output
+    output: 'sf_out/{sampleID}/star-fusion.fusion_predictions.tsv'
+    threads: 2
+    params:
+        lib = config['sf_genome_lib'],
+        out = 'sf_out'
+    run:
+        shell('STAR-Fusion --chimeric_junction {input} \
+            --genome_lib_dir {params.lib} \
+            -O {params.out}/{wildcards.sampleID} \
+            --verbose_level 2')
+
+
+rule sf_copy:
+    input: rules.starfusion.output
+    output: 'sf_calls/{sampleID}_star-fusion.fusion_predictions.tsv'
+    run:
+        shell('cp {input} {output}')
+
+
+rule sf_table:
+    input: expand('sf_calls/{sampleID}_star-fusion.fusion_predictions.tsv', sampleID=sampleIDs)
+    output: 'tables/all_sf.txt'
+    params: span = config['spanning']
+    run:
+        dfs = []
+        for fname in input:
+            df = pandas.read_csv(fname, sep='\t')
+            df['sampleID'] = parse_sampleID(fname)
+            df['starfusion'] = 1
+            df['gene1'] = df['LeftGene'].apply(lambda x: x.split('^')[0])
+            df['gene2'] = df['RightGene'].apply(lambda x: x.split('^')[0])
+            df['fusion'] = df.apply(lambda x: sorted_fusion(x.gene1, x.gene2), axis=1)
+            df['supporting_reads'] = df['SpanningFragCount'] + df['JunctionReadCount']
+            df['total_support'] = df['supporting_reads'].groupby(df['fusion']).transform('sum') # combine fusions that are A|B and B|A
+            df.drop_duplicates('fusion', inplace=True)  # only keep first row with fusion now that support reads are summed
+            df = df[df.total_support >= params.span]    # remove fusions with too few support reads
+            scores = list(range(1, len(df) + 1))
+            scores.reverse()    # you want the fusions w/most reads getting highest scor
+            df.sort_values(by=['total_support'], ascending=[False], inplace=True)
+            df['sf_rank'] = scores
+            df['sf_score'] = df.sf_rank.apply(lambda x: float(x)/len(df))   # percent scores for each fusion (1.0 is top fusion
+            dfs.append(df)
+
+        dfsf = pandas.concat(dfs)
+        dfsf.to_csv(output[0], sep='\t')

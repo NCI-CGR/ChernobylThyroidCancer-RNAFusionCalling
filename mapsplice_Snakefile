@@ -1,0 +1,74 @@
+# vim: ft=python
+
+workdir: os.environ['PWD']
+shell.executable('bash')
+
+localrules: map_all, map_copy
+
+
+rule ms_all:
+    input: 'tables/all_ms.txt'
+
+
+rule mapsplice:
+    input: 
+        'unzipped/{sampleID}_R1.fastq',
+        'unzipped/{sampleID}_R2.fastq'
+    output: 'ms_out/{sampleID}/fusions_well_annotated.txt'
+    threads: 32 
+    params:
+        map = config['ms_dir'],
+        ref = config['ms_ref'],
+        bt_path = config['bow_path'],
+        gtf = config['annot_gtf'],
+        out = config['ms_out']
+    run:
+        shell('export PATH={params.map}/bin:$PATH; \
+                python {params.map}/mapsplice.py \
+                -p {threads} \
+                -o ms_out/{wildcards.sampleID} \
+                --gene-gtf {params.gtf} \
+                --bam --fusion \
+                -x {params.bt_path} \
+                -c {params.ref} \
+                -1 {input[0]} \
+                -2 {input[1]}')
+
+
+rule map_copy:
+    input: rules.mapsplice.output
+    output: 'ms_calls/{sampleID}_ms_fusions_well_annotated.txt'
+    run:
+        shell('cp {input} {output}')
+
+
+rule ms_table:
+    input: expand('ms_calls/{sampleID}_ms_fusions_well_annotated.txt', sampleID=sampleIDs)
+    output: 'tables/all_ms.txt'
+    params: 
+        span = config['spanning'],
+        cols = config['ms_cols']
+    run:
+        dfs = []
+        for fname in input:
+            print(fname)
+            df = pandas.read_csv(fname, names=params.cols, sep='\t', index_col=False)
+            df['sampleID'] = parse_sampleID(fname)
+            df['mapsplice'] = 1
+            df['gene1'] = df.annotated_gene_donor.apply(lambda x: x.split(',')[0])
+            df['gene2'] = df.annotated_gene_acceptor.apply(lambda x: str(x).split(',')[0])
+            df['fusion'] = df.apply(lambda x: sorted_fusion(x.gene1, x.gene2), axis=1)
+            df['supporting_reads'] = df['coverage']
+            df['total_support'] = df['supporting_reads'].groupby(df['fusion']).transform('sum') # combine fusions that are A|B and B|A
+            df.drop_duplicates('fusion', inplace=True)  # only keep first row with fusion now that support reads are summed
+            df = df[df.total_support >= params.span]    # remove fusions with too few support reads
+            scores = list(range(1, len(df) + 1))
+            scores.reverse()    # you want the fusions w/most reads getting highest score
+            df.sort_values(by=['total_support'], ascending=[False], inplace=True)
+            df['ms_rank'] = scores
+            df['ms_score'] = df.ms_rank.apply(lambda x: float(x)/len(df))   # percent scores for each fusion (1.0 is top fusion)
+            dfs.append(df)
+
+        dfms = pandas.concat(dfs)
+        dfms.to_csv(output[0], sep='\t', index=False)
+
