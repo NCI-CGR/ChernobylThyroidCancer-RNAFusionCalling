@@ -48,7 +48,7 @@ rule build_es_table:
         dfs = []
         for fname in input:
             df = pandas.read_csv(fname, sep='\t')
-            df['sampleID'] = parse_sampleID(fname)
+            df['sampleID'] = fname.split('/')[-1].split('_')[0]
             df['ericscript'] = 1
             df['fusion'] = df.apply(lambda row: sorted_fusion(row['GeneName1'], row['GeneName2']), axis=1)
             df['supporting_reads'] = df.spanningreads

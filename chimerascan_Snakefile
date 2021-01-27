@@ -49,10 +49,10 @@ rule cs_table:
         dfs = []
         for fname in input:
             df = pandas.read_csv(fname, sep='\t')
-            df['sampleID'] = parse_sampleID(fname)
+            df['sampleID'] = fname.split('/')[-1].split('_')[0]
             df['chimerascan'] = 1
             df['fusion'] = df.apply(lambda x: sorted_fusion(x.genes5p, x.genes3p), axis=1)
-            df['supporting_reads'] = df.spanning_frags
+            df['supporting_reads'] = df.total_frags
             df['total_support'] = df['supporting_reads'].groupby(df['fusion']).transform('sum') # combine fusions that are A|B and B|A
             df.drop_duplicates('fusion', inplace=True)  # only keep first row with fusion now that support reads are summed
             df = df[df.total_support >= params.span]    # remove fusions with too few support reads

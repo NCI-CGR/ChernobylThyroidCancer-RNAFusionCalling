@@ -73,7 +73,7 @@ rule sf_table:
         dfs = []
         for fname in input:
             df = pandas.read_csv(fname, sep='\t')
-            df['sampleID'] = parse_sampleID(fname)
+            df['sampleID'] = fname.split('/')[-1].split('_')[0]
             df['starfusion'] = 1
             df['gene1'] = df['LeftGene'].apply(lambda x: x.split('^')[0])
             df['gene2'] = df['RightGene'].apply(lambda x: x.split('^')[0])

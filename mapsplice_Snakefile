@@ -53,7 +53,7 @@ rule ms_table:
         for fname in input:
             print(fname)
             df = pandas.read_csv(fname, names=params.cols, sep='\t', index_col=False)
-            df['sampleID'] = parse_sampleID(fname)
+            df['sampleID'] = fname.split('/')[-1].split('_')[0]
             df['mapsplice'] = 1
             df['gene1'] = df.annotated_gene_donor.apply(lambda x: x.split(',')[0])
             df['gene2'] = df.annotated_gene_acceptor.apply(lambda x: str(x).split(',')[0])
